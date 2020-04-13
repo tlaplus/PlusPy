@@ -1,0 +1,10 @@
+./pluspy -S0 -c100 QSort > test7.out 2>test7.out2
+if cmp -s test7.out regression/test7.exp
+then
+    if cmp -s test7.out2 regression/test7.exp2
+    then
+        rm -rf test7.out test7.out2
+        exit 0
+    fi
+fi
+exit 1

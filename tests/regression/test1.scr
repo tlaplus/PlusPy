@@ -1,0 +1,10 @@
+./pluspy -S0 -c100 HourClock > test1.out 2>test1.out2
+if cmp -s test1.out regression/test1.exp
+then
+    if cmp -s test1.out2 regression/test1.exp2
+    then
+        rm -rf test1.out test1.out2
+        exit 0
+    fi
+fi
+exit 1

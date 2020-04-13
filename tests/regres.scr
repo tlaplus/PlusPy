@@ -1,0 +1,12 @@
+for i in 1 2 3 4 5 6 7 8 9 10 11
+do
+    echo running test $i
+    sh regression/test$i.scr
+    case $? in
+    0)
+        ;;
+    *)
+        echo test $i failed
+        exit 1
+    esac
+done

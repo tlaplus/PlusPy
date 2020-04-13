@@ -1,0 +1,3 @@
+PLUSPYPATH=../modules/lib:../modules/book:../modules/other
+export PLUSPYPATH
+python3 ../pluspy.py $@
