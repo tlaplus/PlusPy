@@ -1117,6 +1117,7 @@ class GAssumption(Rule):
     def parse(self, s):
         return self.match("GAssumption", s, Concat([
             OneOf([ tok("ASSUME"), tok("ASSUMPTION"), tok("AXIOM") ]),
+            Optional(Concat([ Identifier(), tok("==") ])),
             GExpression(0)
         ]), [1])
 
@@ -1758,7 +1759,7 @@ def compileOpExpression(od):
     # is the name of an operator or another identifier such as a
     # variable.  If there was a prefix or there are arguments, it must
     # be the name of an operator.  If not, it could be either.
-    id =name_lookup(name)
+    id = name_lookup(name)
     # print("OE", name, id, cargs, operators.get(id))
     if id and not isinstance(id, OperatorExpression):
         assert instances == []
@@ -4088,7 +4089,6 @@ def usage():
     print("    -h: help")
     print("    -i operator: Init operator (default Init)")
     print("    -n operator: Next operator (default Next)")
-    print("    -p arg: argument to Next operator")
     print("    -P path: module directory search path")
     print("    -s: silent")
     print("    -S seed: random seed")
@@ -4107,6 +4107,46 @@ def handleOutput(output):
         print("GOT OUTPUT", d)
         assert False
 
+step = 0
+
+# The Next operator, possibly with arguments separated by "%"
+def run(pp, next):
+    global maxcount, verbose, silent, step
+
+    args = next.split("%")
+    assert 1 <= len(args) and len(args) <= 2
+    if len(args) == 1:
+        arg = ""
+    elif all(isnumeral(c) for c in args[1]):
+        arg = int(args[1])
+    else:
+        arg = args[1]
+    while True:
+        with lock:
+            tries = 0
+            flush()     # do all the outputs
+            drain()     # remove all outputs
+            while not pp.next(args[0], arg):
+                tries += 1
+                if verbose:
+                    print("TRY AGAIN", tries, flush=True)
+                if tries > 100:
+                    cond.wait(0.2)
+                drain()
+                if maxcount != None and step >= maxcount:
+                    break
+
+            if maxcount != None and step >= maxcount:
+                break
+            if pp.unchanged():
+                if not silent:
+                    print("No state change after successful step", flush=True)
+                break
+            tries = 0
+            if not silent:
+                print("Next state:", step, format(pp.getall()), flush=True)
+            step += 1
+
 def main():
     global verbose, silent, maxcount, pluspypath
 
@@ -4114,13 +4154,12 @@ def main():
         pluspypath = os.environ["PLUSPYPATH"]
 
     # Get options.  First set default values
-    proc = None
     initOp = "Init"
-    nextOp = "Next"
+    nextOps = set()
     seed = None
     try:
         opts, args = getopt.getopt(sys.argv[1:],
-                        "c:hi:n:p:P:sS:v",
+                        "c:hi:n:P:sS:v",
                         ["help", "init=", "next=", "path=", "seed="])
     except getopt.GetoptError as err:
         print(str(err))
@@ -4135,9 +4174,7 @@ def main():
         elif o in { "-i", "--init" }:
             initOp = a
         elif o in { "-n", "--next"  }:
-            nextOp = a
-        elif o in { "-p" }:
-            proc = a
+            nextOps.add(a)
         elif o in { "-P", "--path" }:
             pluspypath = a
         elif o in { "-s" }:
@@ -4169,31 +4206,16 @@ def main():
         print("Run behavior for", maxcount, "steps")
         print("---------------")
 
-    i = 0
-    while True:
-        if maxcount != None and i >= maxcount:
-            break
-        with lock:
-            tries = 0
-            flush()     # do all the outputs
-            drain()     # remove all outputs
-            while not pp.next(nextOp, proc):
-                tries += 1
-                if verbose:
-                    print("TRY AGAIN", tries)
-                if tries > 100:
-                    cond.wait(0.2)
-                drain()
-
-            if pp.unchanged():
-                if not silent:
-                    print("No state change after successful step")
-                break
-            tries = 0
-            if not silent:
-                print("Next state:", i, format(pp.getall()))
-        i += 1
-
+    if len(nextOps) != 0:
+        threads = set()
+        for next in nextOps:
+            t = threading.Thread(target=run, args=(pp, next))
+            threads.add(t)
+            t.start()
+        for t in threads:
+            t.join()
+    else:
+        run(pp, "Next")
     if not silent:
         print("MAIN DONE")
     exit(0)
