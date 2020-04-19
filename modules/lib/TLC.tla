@@ -1,11 +1,12 @@
 ------------------------------- MODULE TLC ----------------------------------
 LOCAL INSTANCE Naturals
 LOCAL INSTANCE Sequences
+LOCAL INSTANCE IO
 -----------------------------------------------------------------------------
 
 ToString(v) == (CHOOSE x \in [a : v, b : STRING] : TRUE).b
-Print(out, val) == val
-PrintT(out) == Print(ToString(out) \o "\n", TRUE)
+Print(out, val) == IF IOPut("fd", "stdout", out) THEN val ELSE val
+PrintT(out) == Print(out, TRUE)
 Assert(val, out) == IF val = TRUE THEN TRUE
                                   ELSE CHOOSE v : TRUE
 JavaTime == CHOOSE n : n \in Nat

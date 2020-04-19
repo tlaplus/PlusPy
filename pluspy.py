@@ -35,7 +35,7 @@ def name_lookup(name):
 def name_find(name):
     e = name_lookup(name)
     if not e:
-        print("Identifier", name, "not found", name_stack)
+        print("Identifier", name, "not found")
     return e
 
 # Find a file using a directory path
@@ -266,11 +266,10 @@ class Module:
             assert tloc == "Optional"
             mi = ModInst()
             mi.compile(a[1])
-            for k in mi.operators.keys():
+            for k in mi.globals:
                 self.operators[k] = mi.operators[k]
                 if aloc == None:
                     self.globals.add(k)
-                self.globals.add(k)
         elif t == "decl-fun":
             (tloc, aloc) = a[0]
             assert tloc == "Optional"
@@ -877,7 +876,8 @@ class tok(Rule):
             return parseError(["tok: no more tokens"], s)
         if lexeme(s[0]) == self.what:
             return ("tok", s[0], s[1:])
-        return parseError([("tok: no match with " + self.what, stringToken(s[0]))], s)
+        return parseError([("tok: no match with '" + self.what + "'",
+                                stringToken(s[0]))], s)
 
 class Tok(Rule):
     def __init__(self, what, name):
@@ -1502,6 +1502,13 @@ def lexer(s, file):
             first = True
             continue
 
+        # Skip over "pure" TLA+
+        if s.startswith("\\*++:SPEC"):
+            s = s[8:]
+            while len(s) > 0 and not s.startswith("\\*++:PlusPy"):
+                s = s[1:]
+            continue
+
         # skip over line comments
         if s.startswith("\\*"):
             s = s[2:]
@@ -1652,6 +1659,8 @@ def getprefix(ast, operators):
         assert t3 == "Identifier"
         od = operators[lexeme(a3)]
         assert isinstance(od, OperatorExpression)
+        if not isinstance(od.expr, ModInst):
+            print("trying to instantiate", od.expr)
         assert isinstance(od.expr, ModInst)
         (t4, a4) = a2[1]
         assert t4 == "Optional"
@@ -1692,8 +1701,8 @@ def opSubst(instances):
 
     # Check that the arity of the operator is correct
     if (len(oargs) != len(iargs)):
-        print("arity mismatch", lex, oargs, iargs)
-    assert len(oargs) == len(iargs)
+        print("arity mismatch", lex, "expected:", len(oargs), "got:", len(iargs))
+        exit(1)
 
     # Do a substitution, replacing argument names with argument values
     subs = {}
@@ -2258,8 +2267,8 @@ class OperatorExpression(Expression):
                     expr=self.expr.substitute(subs), primed=self.primed)
 
     def eval(self, containers, boundedvars):
-        print("operator", self, "invoked without arguments")
-        exit(1)
+        # print("operator", self, "invoked without arguments")
+        return self
 
 # Another simple one is a container expression, which holds a value for a variable
 # for both the previous state and the next state
@@ -2394,6 +2403,8 @@ class ExistsExpression(Expression):
                             expr=expr, primed=self.primed)
 
     def enumerate(self, containers, domains, boundedvars):
+        global IO_outputs
+
         if domains == []:
             return self.expr.eval(containers, boundedvars)
         (var, domain) = domains[0]
@@ -2402,10 +2413,19 @@ class ExistsExpression(Expression):
         domain = sorted(domain, key=lambda x: key(x))
         domain = random.sample(list(domain), len(domain))
 
+        # Copy next state in case need to restore
+        output_copy = IO_outputs.copy()
+        copy = {}
+        for (k, v) in containers.items():
+            copy[k] = v.next
         for val in domain:
             boundedvars[var] = ValueExpression(val)
             if self.enumerate(containers, domains[1:], boundedvars):
                 return True
+            # restore state before trying next
+            for (k, v) in copy.items():
+                containers[k].next = v
+            IO_outputs = output_copy
         return False
 
     def eval(self, containers, boundedvars):
@@ -3174,6 +3194,8 @@ class InfixExpression(Expression):
             primed=self.primed)
 
     def eval(self, containers, boundedvars):
+        global IO_outputs           # IO_outputs behaves as a hidden variable
+
         lex = lexeme(self.op)
 
         # One special case is if the expression is of the form x' = ...
@@ -3201,6 +3223,7 @@ class InfixExpression(Expression):
         # with FALSE left hand side.  Also, randomize lhs/rhs
         # evaluation
         if lex == "\\/":
+            output_copy = IO_outputs.copy()
             copy = {}
             for (k, v) in containers.items():
                 copy[k] = v.next
@@ -3222,6 +3245,7 @@ class InfixExpression(Expression):
             # restore and evaluate right hand side
             for (k, v) in copy.items():
                 containers[k].next = v
+            IO_outputs = output_copy
         elif lex == "/\\":
             assert r == 0
             if not lhs:
@@ -3876,7 +3900,7 @@ class TLCGetWrapper(Wrapper):
 wrappers["TLC"] = {
     "Assert": AssertWrapper(),
     "JavaTime": JavaTimeWrapper(),
-    "Print": PrintWrapper(),
+    # "Print": PrintWrapper(),
     "RandomElement": RandomElementWrapper(),
     "TLCSet": TLCSetWrapper(),
     "TLCGet": TLCGetWrapper(),
@@ -3885,18 +3909,17 @@ wrappers["TLC"] = {
 
 import threading
 
-netEpoch = 0
-netMsgs = []
-
 class netReceiver(threading.Thread):
-    def __init__(self, src):
+    def __init__(self, src, mux):
         threading.Thread.__init__(self)
         self.src = src
+        self.mux = mux
 
     def run(self):
-        global netEpoch, netMsgs
+        global IO_inputs
 
         (skt, addr) = self.src
+        (host, port) = addr
         all=[]
         while True:
             data = skt.recv(8192)
@@ -3904,137 +3927,144 @@ class netReceiver(threading.Thread):
                 break
             all.append(data)
         with lock:
-            (epoch, msg) = pickle.loads(b''.join(all))
+            msg = pickle.loads(b''.join(all))
             if verbose:
-                print("netReceiver", addr, epoch, msg)
-            if epoch >= netEpoch:
-                netMsgs.append((epoch, msg))
+                print("netReceiver", addr, msg)
+            IO_inputs.append(FrozenDict({
+                "intf": "tcp", "mux": self.mux, "data": msg}
+            ))
             cond.notify()
 
 class netSender(threading.Thread):
-    def __init__(self, dst, epoch, msg):
+    def __init__(self, mux, msg):
         threading.Thread.__init__(self)
-        self.dst = dst
-        self.epoch = epoch
+        self.mux = mux
         self.msg = msg
 
     def run(self):
+        parts = self.mux.split(":")
+        dst = (parts[0], int(parts[1]))
         if verbose:
-            print("netSender", self.dst, self.epoch, self.msg)
+            print("netSender", dst, self.msg)
         while True:
             try:
                 skt = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-                skt.connect(self.dst)
-                skt.sendall(pickle.dumps((self.epoch, self.msg)))
+                skt.connect(dst)
+                skt.sendall(pickle.dumps(self.msg))
                 skt.close()
                 break
             except ConnectionRefusedError:
                 time.sleep(0.5)
 
 class netServer(threading.Thread):
-    def __init__(self, addr):
+    def __init__(self, mux):
         threading.Thread.__init__(self)
-        self.addr = addr
+        self.mux = mux
 
     def run(self):
         skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        skt.bind(self.addr)
+        parts = self.mux.split(":")
+        skt.bind((parts[0], int(parts[1])))
         skt.listen()
         while True:
             client = skt.accept()
-            netReceiver(client).start()
+            netReceiver(client, self.mux).start()
 
-def netInit(p):
-    global netEpoch
+IO_inputs = []
+IO_outputs = []
+IO_running = set()
 
-    assert netEpoch == 0
-    parts = p.split(":")
-    netServer((parts[0], int(parts[1]))).start()
-    netEpoch = 1
+def flush():
+    global IO_outputs
+    for x in IO_outputs: 
+        d = x.d
+        if d["intf"] == "fd":
+            if d["mux"] == "stdout":
+                print(d["data"], end="")
+                sys.stdout.flush()
+            else:
+                assert d["mux"] == "stderr"
+                print(d["data"], end="", file=sys.stderr)
+                sys.stderr.flush()
+        elif d["intf"] == "tcp":
+            netSender(d["mux"], d["data"]).start()
+        else:
+            assert False
 
-class InitialStateWrapper(Wrapper):
+def drain():
+    global IO_outputs
+    IO_outputs = []
+
+class IOPutWrapper(Wrapper):
     def __str__(self):
-        return "Messaging!InitialState(_)"
+        return "IO!IOPut(_)"
 
     def eval(self, id, args):
-        assert len(args) == 1
-        return simplify(FrozenDict({ k:() for k in args[0] }))
+        assert len(args) == 3
+        IO_outputs.append(FrozenDict(
+            { "intf": args[0], "mux": args[1], "data": args[2] }
+        ))
+        return True
 
-class SendAllWrapper(Wrapper):
+class Reader(threading.Thread):
+    def run(self):
+        global IO_inputs
+
+        while True:
+            inp = input()
+            with lock:
+                IO_inputs.append(FrozenDict(
+                    { "intf": "fd", "mux": "stdin", "data": inp}
+                ))
+                cond.notify()
+
+class IOWaitWrapper(Wrapper):
     def __str__(self):
-        return "Messaging!Send(_)"
+        return "IO!IOWait(Pattern(_))"
+
+    def eval(self, id, args):
+        global IO_running
+
+        assert len(args) == 2
+
+        # First check if there's already input
+        for x in IO_inputs:
+            assert isinstance(x, FrozenDict)
+            d = x.d
+            if d["intf"] == args[0] and d["mux"] == args[1]:
+                return True
+
+        # If not, make sure a reader/receiver is running
+        if (args[0], args[1]) not in IO_running:
+            if args[0] == "fd" and args[1] == "stdin":
+                Reader().start()
+            elif args[0] == "tcp":
+                netServer(args[1]).start()
+            else:
+                assert False
+            IO_running.add((args[0], args[1]))
+
+        return False
+
+class IOGetWrapper(Wrapper):
+    def __str__(self):
+        return "IO!IOGet(Pattern(_))"
 
     def eval(self, id, args):
         assert len(args) == 2
-        if netEpoch > 0:
-            for m in args[1]:
-                (dest, payload) = m
-                parts = dest.split(":")
-                netSender((parts[0], int(parts[1])), netEpoch, payload).start()
-            return args[0]
-        else:
-            mi = args[0].d.copy()
-            for m in args[1]:
-                (dest, payload) = m
-                mi[dest] = tuple(list(mi[dest]) + [payload])
-            return simplify(FrozenDict(mi))
+        for x in IO_inputs:
+            assert isinstance(x, FrozenDict)
+            d = x.d
+            if d["intf"] == args[0] and d["mux"] == args[1]:
+                IO_inputs.remove(x)
+                return d["data"]
+        assert False
 
-class WaitForMessageWrapper(Wrapper):
-    def __str__(self):
-        return "Messaging!WaitForMessage(_)"
-
-    def eval(self, id, args):
-        global netEpoch, netMsgs
-
-        assert len(args) == 2
-        if netEpoch > 0:
-            netMsgs = [ (e, m) for (e, m) in netMsgs if e >= netEpoch ]
-            return netMsgs != []
-        else:
-            mi = args[0].d
-            return mi[args[1]] != ()
-
-class NextMessageWrapper(Wrapper):
-    def __str__(self):
-        return "Messaging!WaitForMessage(_)"
-
-    def eval(self, id, args):
-        global netEpoch, netMsgs
-
-        assert len(args) == 2
-        if netEpoch > 0:
-            netMsgs = [ (e, m) for (e, m) in netMsgs if e >= netEpoch ]
-            netMsgs = sorted(netMsgs, key=lambda x: key(x))
-            (epoch, msg) = netMsgs[0]
-            assert epoch == netEpoch
-            return msg
-        else:
-            mi = args[0].d
-            return mi[args[1]][0]
-
-class DeliveredMessageWrapper(Wrapper):
-    def __str__(self):
-        return "Messaging!DeliveredMessage(_)"
-
-    def eval(self, id, args):
-        global netEpoch, netMsgs
-
-        assert len(args) == 2
-        if netEpoch > 0:
-            netMsgs = netMsgs[1:]
-            return True
-        else:
-            mi = args[0].d.copy()
-            mi[args[1]] = tuple(list(mi[args[1]])[1:])
-            return simplify(FrozenDict(mi))
-
-wrappers["Messaging"] = {
-    "InitialState": InitialStateWrapper(),
-    "SendAll": SendAllWrapper(),
-    "WaitForMessage": WaitForMessageWrapper(),
-    "NextMessage": NextMessageWrapper(),
-    "DeliveredMessage": DeliveredMessageWrapper()
+wrappers["IO"] = {
+    "IOPut": IOPutWrapper(),
+    "IOWait": IOWaitWrapper(),
+    "IOGet": IOGetWrapper()
 }
 
 #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### 
@@ -4064,6 +4094,18 @@ def usage():
     print("    -S seed: random seed")
     print("    -v: verbose output")
     exit(1)
+
+def handleOutput(output):
+    d = convert(output)
+    if d["intf"] == "fd":
+        if d["mux"] == "stdout":
+            print(d["data"], end="")
+        else:
+            assert d["mux"] == "stderr"
+            print(d["data"], end="", file=sys.stderr)
+    else:
+        print("GOT OUTPUT", d)
+        assert False
 
 def main():
     global verbose, silent, maxcount, pluspypath
@@ -4096,7 +4138,6 @@ def main():
             nextOp = a
         elif o in { "-p" }:
             proc = a
-            netInit(proc)
         elif o in { "-P", "--path" }:
             pluspypath = a
         elif o in { "-s" }:
@@ -4122,21 +4163,6 @@ def main():
     if not silent:
         print("Initial context:", format(pp.getall()))
 
-    class Reader(threading.Thread):
-        def run(self):
-            while True:
-                proposal = input("Enter input: ")
-                with lock:
-                    props = pp.get("Proposals")
-                    x = set(props)
-                    x.add(proposal)
-                    pp.set("Proposals", frozenset(x))
-                    cond.notify()
-
-    proposals = pp.get("Proposals")
-    if proposals != None:
-        Reader().start()
-
     if verbose:
         print()
         print("---------------")
@@ -4149,15 +4175,19 @@ def main():
             break
         with lock:
             tries = 0
+            flush()     # do all the outputs
+            drain()     # remove all outputs
             while not pp.next(nextOp, proc):
                 tries += 1
                 if verbose:
                     print("TRY AGAIN", tries)
                 if tries > 100:
                     cond.wait(0.2)
+                drain()
 
             if pp.unchanged():
-                print("No state change after successful step")
+                if not silent:
+                    print("No state change after successful step")
                 break
             tries = 0
             if not silent:
@@ -4166,6 +4196,7 @@ def main():
 
     if not silent:
         print("MAIN DONE")
+    exit(0)
 
 if __name__ == "__main__":
     main()

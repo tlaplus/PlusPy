@@ -1,14 +1,28 @@
 ----------------------------- MODULE TestBosco -----------------------------
 EXTENDS Naturals
-VARIABLES processes, Proposals, mi, msgs
+VARIABLES processes, mi, msgs
+
+Processes ==
+    {
+        "localhost:5001", "localhost:5002", "localhost:5003", "localhost:5004"
+    }
+
+Inputs ==
+    [ [ p \in Processes |-> "" ] EXCEPT
+        !["localhost:5001"] = "red",
+        !["localhost:5002"] = "blue",
+        !["localhost:5003"] = "red",
+        !["localhost:5004"] = "blue"
+    ]
 
 B == INSTANCE Bosco WITH
-    Processes <- 1..4,
-    Quorums   <- { { 1, 2, 3 }, { 1, 2, 4 }, { 1, 3, 4 }, { 2, 3, 4 } },
-    procs     <- processes
+    Processes <- Processes,
+    Quorums <- { Processes \ {p}: p \in Processes },
+    Data    <- { "red", "blue", "green", "orange", "black" },
+    procs   <- processes
 
 Init == B!Init
 Next == B!Next
 Proc(p) == B!Proc(p)
-Spec == Init /\ [][Next]_<<processes, mi, msgs, Proposals>>
+Spec == Init /\ [][Next]_<<processes, mi, msgs>>
 ============================================================================
