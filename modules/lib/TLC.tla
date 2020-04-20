@@ -34,4 +34,11 @@ RandomElement(s) == CHOOSE x \in s : TRUE
 Any == CHOOSE x : x \notin { "Any" }
 
 TLCEval(v) == v
+
+JSignalReturn(t, d) == d
+    /\ IOPut("local", t, d)
+JReturn(d) == d
+JWait(t) ==
+    /\ IOWait("local", t)
+    /\ IOGet("local", t) \notin {}
 =============================================================================

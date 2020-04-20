@@ -45,32 +45,62 @@ option to pluspy.
 You should be able to run Peterson.tla, Prime.tla, and Qsort.tla in
 much the same way, but try larger -c counts for those.
 
+-------- EXAMPLE 2: Threads --------
+
+The Peterson module has multiple processes.  PlusPy can run each as
+a separate thread.  Run: "./pluspy -c100 -n proc%0 -n proc%1 Peterson".
+"proc" is an operator in the Peterson module that takes an argument.
+The "-n x%y" argument to pluspy starts a thread that repeatedly evaluates
+the x operator with argument y instead of the default "Next".  You may
+also want to try: "./pluspy -c100 -n proc%0 Peterson" and 
+./pluspy -c100 -n proc%1 Peterson" which each will run just one of the
+processes.
+
 -------- EXAMPLE 2: Sending and Receiving Messages --------
 
 Open three windows.  Run the following commands, one in each of the windows:
 
-    ./pluspy -c100 -n Proc -p localhost:5001 TestBinBosco
-    ./pluspy -c100 -n Proc -p localhost:5002 TestBinBosco
-    ./pluspy -c100 -n Proc -p localhost:5003 TestBinBosco
+    ./pluspy -c100 -n Proc%localhost:5001 TestBinBosco
+    ./pluspy -c100 -n Proc%localhost:5002 TestBinBosco
+    ./pluspy -c100 -n Proc%localhost:5003 TestBinBosco
 
-The "-n" option tell pluspy not to evaluate the Next operator, buth the
-Proc operator.  The Proc action takes one argument, the process identifier,
-which is specified using the "-p" option.
+The Proc action takes one argument, the process identifier,
 
-The processes will actually send and receive messages, trying to solve
-consensus.  Although BinBosco has no rule to actually decide, in all
-likelihood they will each end up with the same estimate after about five
-rounds.  Only three of the four processes can do so.  You can inspect
-the output and see the state of each of the processes and the set Messages.
+The processes will actually send and receive messages, trying to
+solve consensus.  Although BinBosco has no rule to actually decide,
+in all likelihood they will each end up with the same estimate after
+about five rounds.  Only three of the four processes can do so.  You
+can inspect the output and see the state of each of the processes
+and the set Messages.  The "processes" variable of localhost:5001
+should contain something like the following in the end:
 
-Running BinBosco this way is a little odd, as each pluspy process only updates
-part of what is really supposed to be a global state.  You can imagine there
-being a refinement mapping to the virtual global state, where the local state
-of TLA+ process i in pluspy process i maps to the state of TLA+ process i in
-the global state.
+    [
+        "localhost:5001" |-> [ estimate |-> "red",  round |-> 5 ],
+        "localhost:5002" |-> [ estimate |-> "blue", round |-> 0 ],
+        "localhost:5003" |-> [ estimate |-> "red",  round |-> 0 ],
+        "localhost:5004" |-> [ estimate |-> "blue", round |-> 0 ]
+    ]
 
-Messaging is specified in the modules/lib/Messaging.tla module.  Besides the
-message interface variable mi, there are the following three operators exported:
+Similarly, the "processes" variable of localhost:5002 might contain:
+
+    [
+        "localhost:5001" |-> [ estimate |-> "red",  round |-> 0 ],
+        "localhost:5002" |-> [ estimate |-> "red",  round |-> 5 ],
+        "localhost:5003" |-> [ estimate |-> "red",  round |-> 0 ],
+        "localhost:5004" |-> [ estimate |-> "blue", round |-> 0 ]
+    ]
+
+Note that all processes end up with the same estimate, probably
+around round 5.  Running BinBosco this way is a little odd, as each
+pluspy process only updates part of what is really supposed to be
+a global state.  You can imagine there being a refinement mapping
+to the virtual global state, where the local state of TLA+ process
+i in pluspy process i maps to the state of TLA+ process i in the
+global state.
+
+Messaging is specified in the modules/lib/Messaging.tla module.
+Besides the message interface variable mi, there are the following
+three operators exported:
 
 Init                        \* initializes mi
 Send(msgs)                  \* sends the given << destination, payload >> messages
@@ -83,33 +113,20 @@ the messaging module starts.  It uses the IO module described below.
 -------- The IO module --------
 
 PlusPy exports a module in modules/lib/IO.tla that allows processes to do various
-kinds of I/O.
-
-------------------------------- MODULE IO ----------------------------------
-\* This module essentially uses a hidden sequence variable H
-
-\* Append << intf, mux, data >> to the end of sequence H
-IOPut(intf, mux, data) == TRUE \* H' = Append(H, <<intf, mux, data>>)
-
-\* Wait until there is an element of the form <<intf, mux, _>> in sequence H
-IOWait(intf, mux) == TRUE \* \E i \in Nat, d \in Data: H[i] = <<intf, mux, d>>
-
-\* Remove the first element of the form <<intf, mux, data>> from sequence H
-\* and return data
-IOGet(intf, mux) == TRUE \* hard to formalize...
-=============================================================================
-
-There are currently two kinds of interfaces defined: "fd", and "tcp".
-For "fd", there are three muxes: "stdin", "stdout", and "stderr".  For example
-IOPut("fd", "stdout", "hello") prints hello.  Note that all I/O is "deferred":
-it is only performed if the action in which it occurs evaluates to TRUE.
+kinds of I/O.  There are currently three kinds of interfaces defined: "fd", "tcp",
+and "local".  For "fd", there are three muxes: "stdin", "stdout", and "stderr".
+For example IOPut("fd", "stdout", "hello") prints hello.  Note that all I/O is
+"deferred": it is only performed if the action in which it occurs evaluates to TRUE.
 
 The modules/lib/Input.tla module shows how one can read from standard input.
-The Input.tla module is "pure TLA+" -- it has no implied variable.
-It also provides an example of the "\*++:SPEC" and "\*++:PlusPy" sections.
+The Input.tla module is "pure TLA+" -- it has no implied variable.  It also
+provides an example of the "\*++:SPEC" and "\*++:PlusPy" sections.
 
 To send and receive TCP messages, use the "tcp" interface and use as "mux" a
 TCP/IP address of the form "x.x.x.x:port".
+
+The "local" interface is a little like the IP loopback interface.  It allows
+sending messages to self.
 
 -------- TLA+ value representations in Python --------
 

@@ -1117,6 +1117,7 @@ class GAssumption(Rule):
     def parse(self, s):
         return self.match("GAssumption", s, Concat([
             OneOf([ tok("ASSUME"), tok("ASSUMPTION"), tok("AXIOM") ]),
+            Optional(Concat([ Identifier(), tok("==") ])),
             GExpression(0)
         ]), [1])
 
@@ -1758,7 +1759,7 @@ def compileOpExpression(od):
     # is the name of an operator or another identifier such as a
     # variable.  If there was a prefix or there are arguments, it must
     # be the name of an operator.  If not, it could be either.
-    id =name_lookup(name)
+    id = name_lookup(name)
     # print("OE", name, id, cargs, operators.get(id))
     if id and not isinstance(id, OperatorExpression):
         assert instances == []
@@ -2403,7 +2404,7 @@ class ExistsExpression(Expression):
                             expr=expr, primed=self.primed)
 
     def enumerate(self, containers, domains, boundedvars):
-        global IO_outputs
+        global IO_outputs, waitset, signalset
 
         if domains == []:
             return self.expr.eval(containers, boundedvars)
@@ -2415,6 +2416,8 @@ class ExistsExpression(Expression):
 
         # Copy next state in case need to restore
         output_copy = IO_outputs.copy()
+        waitset_copy = waitset.copy()
+        signalset_copy = signalset.copy()
         copy = {}
         for (k, v) in containers.items():
             copy[k] = v.next
@@ -2426,6 +2429,8 @@ class ExistsExpression(Expression):
             for (k, v) in copy.items():
                 containers[k].next = v
             IO_outputs = output_copy
+            waitset = waitset_copy
+            signalset = signalset_copy
         return False
 
     def eval(self, containers, boundedvars):
@@ -2840,7 +2845,7 @@ class OutfixExpression(Expression):
         tries = 0
         i = 0
         while True:
-            global maxcount
+            global maxcount, waitset, cond
 
             if not silent:
                 s = { k.id:c.next for (k, c) in containers.items() }
@@ -2868,7 +2873,7 @@ class OutfixExpression(Expression):
                 tries += 1
                 if verbose or tries % 100 == 0:
                     print("always: try again", tries)
-                    time.sleep(1)
+                    cond.wait(0.2)
             i += 1
 
     def unchanged(self, expr):
@@ -3194,7 +3199,7 @@ class InfixExpression(Expression):
             primed=self.primed)
 
     def eval(self, containers, boundedvars):
-        global IO_outputs           # IO_outputs behaves as a hidden variable
+        global IO_outputs, waitset, signalset  # these behave as hidden variables
 
         lex = lexeme(self.op)
 
@@ -3224,6 +3229,8 @@ class InfixExpression(Expression):
         # evaluation
         if lex == "\\/":
             output_copy = IO_outputs.copy()
+            waitset_copy = waitset.copy()
+            signalset_copy = signalset.copy()
             copy = {}
             for (k, v) in containers.items():
                 copy[k] = v.next
@@ -3246,6 +3253,8 @@ class InfixExpression(Expression):
             for (k, v) in copy.items():
                 containers[k].next = v
             IO_outputs = output_copy
+            waitset = waitset_copy
+            signalset = signalset_copy
         elif lex == "/\\":
             assert r == 0
             if not lhs:
@@ -3897,6 +3906,27 @@ class TLCGetWrapper(Wrapper):
         assert len(args) == 1
         return TLCvars[args[0]]
 
+class JWaitWrapper(Wrapper):
+    def __str__(self):
+        return "TLC!JWait(_)"
+
+    def eval(self, id, args):
+        assert len(args) == 1
+        global waitset
+        assert args[0] not in waitset
+        waitset.add(args[0])
+        return True
+
+class JSignalReturnWrapper(Wrapper):
+    def __str__(self):
+        return "TLC!JSignalReturn(_,_)"
+
+    def eval(self, id, args):
+        assert len(args) == 2
+        global signalset
+        signalset.add(args[0])
+        return args[1]
+
 wrappers["TLC"] = {
     "Assert": AssertWrapper(),
     "JavaTime": JavaTimeWrapper(),
@@ -3904,7 +3934,9 @@ wrappers["TLC"] = {
     "RandomElement": RandomElementWrapper(),
     "TLCSet": TLCSetWrapper(),
     "TLCGet": TLCGetWrapper(),
-    "ToString": ToStringWrapper()
+    "ToString": ToStringWrapper(),
+    "JWait": JWaitWrapper(),
+    "JSignalReturn": JSignalReturnWrapper()
 }
 
 import threading
@@ -3975,6 +4007,18 @@ IO_inputs = []
 IO_outputs = []
 IO_running = set()
 
+class Reader(threading.Thread):
+    def run(self):
+        global IO_inputs
+
+        while True:
+            inp = input()
+            with lock:
+                IO_inputs.append(FrozenDict(
+                    { "intf": "fd", "mux": "stdin", "data": inp}
+                ))
+                cond.notify()
+
 def flush():
     global IO_outputs
     for x in IO_outputs: 
@@ -3990,11 +4034,22 @@ def flush():
         elif d["intf"] == "tcp":
             netSender(d["mux"], d["data"]).start()
         else:
-            assert False
+            assert d["intf"] == "local"
+            IO_inputs.append(x)
+
+    global waitset, signalset, cond
+    wakeup = False
+    for x in signalset:
+        if x in waitset:
+            waitset.remove(x)
+            wakeup = True
+    if wakeup:
+        cond.notifyAll()
 
 def drain():
-    global IO_outputs
+    global IO_outputs, signalset
     IO_outputs = []
+    signalset = set()
 
 class IOPutWrapper(Wrapper):
     def __str__(self):
@@ -4006,18 +4061,6 @@ class IOPutWrapper(Wrapper):
             { "intf": args[0], "mux": args[1], "data": args[2] }
         ))
         return True
-
-class Reader(threading.Thread):
-    def run(self):
-        global IO_inputs
-
-        while True:
-            inp = input()
-            with lock:
-                IO_inputs.append(FrozenDict(
-                    { "intf": "fd", "mux": "stdin", "data": inp}
-                ))
-                cond.notify()
 
 class IOWaitWrapper(Wrapper):
     def __str__(self):
@@ -4042,7 +4085,7 @@ class IOWaitWrapper(Wrapper):
             elif args[0] == "tcp":
                 netServer(args[1]).start()
             else:
-                assert False
+                assert args[0] == "local"
             IO_running.add((args[0], args[1]))
 
         return False
@@ -4088,7 +4131,6 @@ def usage():
     print("    -h: help")
     print("    -i operator: Init operator (default Init)")
     print("    -n operator: Next operator (default Next)")
-    print("    -p arg: argument to Next operator")
     print("    -P path: module directory search path")
     print("    -s: silent")
     print("    -S seed: random seed")
@@ -4107,6 +4149,52 @@ def handleOutput(output):
         print("GOT OUTPUT", d)
         assert False
 
+step = 0
+waitset = set()
+signalset = set()
+
+# The Next operator, possibly with arguments separated by "%"
+def run(pp, next):
+    global maxcount, verbose, silent, step, waitset
+
+    args = next.split("%")
+    assert 1 <= len(args) and len(args) <= 2
+    if len(args) == 1:
+        arg = ""
+    elif all(isnumeral(c) for c in args[1]):
+        arg = int(args[1])
+    else:
+        arg = args[1]
+    while True:
+        with lock:
+            tries = 0
+            flush()     # do all the outputs
+            drain()     # remove all outputs
+            while not pp.next(args[0], arg):
+                tries += 1
+                if verbose:
+                    print("TRY AGAIN", tries, flush=True)
+                if tries > 100:
+                    cond.wait(0.2)
+                drain()
+                if maxcount != None and step >= maxcount:
+                    break
+
+            if maxcount != None and step >= maxcount:
+                break
+            if pp.unchanged():
+                if not silent:
+                    print("No state change after successful step", flush=True)
+                break
+            tries = 0
+            if not silent:
+                print("Next state:", step, format(pp.getall()), flush=True)
+            step += 1
+
+            # To implement JWait/JSignalReturn
+            while arg in waitset:
+                cond.wait(0.2)
+
 def main():
     global verbose, silent, maxcount, pluspypath
 
@@ -4114,13 +4202,12 @@ def main():
         pluspypath = os.environ["PLUSPYPATH"]
 
     # Get options.  First set default values
-    proc = None
     initOp = "Init"
-    nextOp = "Next"
+    nextOps = set()
     seed = None
     try:
         opts, args = getopt.getopt(sys.argv[1:],
-                        "c:hi:n:p:P:sS:v",
+                        "c:hi:n:P:sS:v",
                         ["help", "init=", "next=", "path=", "seed="])
     except getopt.GetoptError as err:
         print(str(err))
@@ -4135,9 +4222,7 @@ def main():
         elif o in { "-i", "--init" }:
             initOp = a
         elif o in { "-n", "--next"  }:
-            nextOp = a
-        elif o in { "-p" }:
-            proc = a
+            nextOps.add(a)
         elif o in { "-P", "--path" }:
             pluspypath = a
         elif o in { "-s" }:
@@ -4169,31 +4254,16 @@ def main():
         print("Run behavior for", maxcount, "steps")
         print("---------------")
 
-    i = 0
-    while True:
-        if maxcount != None and i >= maxcount:
-            break
-        with lock:
-            tries = 0
-            flush()     # do all the outputs
-            drain()     # remove all outputs
-            while not pp.next(nextOp, proc):
-                tries += 1
-                if verbose:
-                    print("TRY AGAIN", tries)
-                if tries > 100:
-                    cond.wait(0.2)
-                drain()
-
-            if pp.unchanged():
-                if not silent:
-                    print("No state change after successful step")
-                break
-            tries = 0
-            if not silent:
-                print("Next state:", i, format(pp.getall()))
-        i += 1
-
+    if len(nextOps) != 0:
+        threads = set()
+        for next in nextOps:
+            t = threading.Thread(target=run, args=(pp, next))
+            threads.add(t)
+            t.start()
+        for t in threads:
+            t.join()
+    else:
+        run(pp, "Next")
     if not silent:
         print("MAIN DONE")
     exit(0)
