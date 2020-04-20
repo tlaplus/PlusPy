@@ -45,7 +45,7 @@ def file_find(name, path):
         full = os.path.join(dir, name)
         if os.path.exists(full):
             return os.path.abspath(full)
-    return None
+    return False
 
 # For debugging, we give each bounded variable a unique identifier
 bv_counter = 0
@@ -413,9 +413,8 @@ class Module:
 
     def load_from_file(self, file):
         full = file_find(file, pluspypath)
-        if full == None:
-            print("can't find", file, ": fatal error", file=sys.stderr)
-            exit(1)
+        if not full:
+            return False
         with open(full) as f:
             return self.load(f, file)
 
@@ -425,7 +424,9 @@ def load_module(name):
         if modules.get(name) == None:
             mod = Module()
             name_stack.append({})
-            mod.load_from_file(name + ".tla")
+            if not mod.load_from_file(name + ".tla"):
+                print("can't load", name, ": fatal error", file=sys.stderr)
+                exit(1)
             name_stack.pop()
             modules[name] = mod
         else:
@@ -3869,6 +3870,15 @@ class PrintWrapper(Wrapper):
         print(str(convert(args[0])), end="")
         return args[1]
 
+class PrintTWrapper(Wrapper):
+    def __str__(self):
+        return "TLC!TPrint(_)"
+
+    def eval(self, id, args):
+        assert len(args) == 1
+        print(str(convert(args[0])))
+        return True
+
 class RandomElementWrapper(Wrapper):
     def __str__(self):
         return "TLC!RandomElement(_)"
@@ -3906,6 +3916,17 @@ class TLCGetWrapper(Wrapper):
         assert len(args) == 1
         return TLCvars[args[0]]
 
+wrappers["TLC"] = {
+    "Assert": AssertWrapper(),
+    "JavaTime": JavaTimeWrapper(),
+    "Print": PrintWrapper(),
+    "PrintT": PrintTWrapper(),
+    "RandomElement": RandomElementWrapper(),
+    "TLCSet": TLCSetWrapper(),
+    "TLCGet": TLCGetWrapper(),
+    "ToString": ToStringWrapper(),
+}
+
 class JWaitWrapper(Wrapper):
     def __str__(self):
         return "TLC!JWait(_)"
@@ -3928,13 +3949,6 @@ class JSignalReturnWrapper(Wrapper):
         return args[1]
 
 wrappers["TLC"] = {
-    "Assert": AssertWrapper(),
-    "JavaTime": JavaTimeWrapper(),
-    # "Print": PrintWrapper(),
-    "RandomElement": RandomElementWrapper(),
-    "TLCSet": TLCSetWrapper(),
-    "TLCGet": TLCGetWrapper(),
-    "ToString": ToStringWrapper(),
     "JWait": JWaitWrapper(),
     "JSignalReturn": JSignalReturnWrapper()
 }
@@ -4053,7 +4067,7 @@ def drain():
 
 class IOPutWrapper(Wrapper):
     def __str__(self):
-        return "IO!IOPut(_)"
+        return "IOUtils!IOPut(_)"
 
     def eval(self, id, args):
         assert len(args) == 3
@@ -4064,7 +4078,7 @@ class IOPutWrapper(Wrapper):
 
 class IOWaitWrapper(Wrapper):
     def __str__(self):
-        return "IO!IOWait(Pattern(_))"
+        return "IOUtils!IOWait(Pattern(_))"
 
     def eval(self, id, args):
         global IO_running
@@ -4092,7 +4106,7 @@ class IOWaitWrapper(Wrapper):
 
 class IOGetWrapper(Wrapper):
     def __str__(self):
-        return "IO!IOGet(Pattern(_))"
+        return "IOUtils!IOGet(Pattern(_))"
 
     def eval(self, id, args):
         assert len(args) == 2
@@ -4104,7 +4118,7 @@ class IOGetWrapper(Wrapper):
                 return d["data"]
         assert False
 
-wrappers["IO"] = {
+wrappers["IOUtils"] = {
     "IOPut": IOPutWrapper(),
     "IOWait": IOWaitWrapper(),
     "IOGet": IOGetWrapper()
