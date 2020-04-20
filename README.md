@@ -10,7 +10,7 @@ Run "./pluspy -h" for basic help.  The output should be something like:
         -h: help
         -i: Init operator (default Init)
         -n: Next operator (default Next)
-        -p: argument to Next operator
+        -P path: module directory search path
         -s: silent output
         -S seed: random seed for reproducible tests
         -v: verbose output
