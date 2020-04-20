@@ -56,7 +56,14 @@ also want to try: "./pluspy -c100 -n proc%0 Peterson" and
 ./pluspy -c100 -n proc%1 Peterson" which each will run just one of the
 processes.
 
--------- EXAMPLE 2: Sending and Receiving Messages --------
+Using the new JWait/JSignalReturn interfaces in TLC, threads can use
+condition variables.  See modules/other/BoundedQueueSplit.tla for an
+example.  Run using:
+
+    ./pluspy -n producer%p1 -n producer%p2 -n producer%p3 \
+                -n consumer%c1 -n consumer%c2 -n consumer%c3 TestBQ
+
+-------- EXAMPLE 3: Sending and Receiving Messages --------
 
 Open three windows.  Run the following commands, one in each of the windows:
 
