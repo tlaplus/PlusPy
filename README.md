@@ -58,10 +58,12 @@ processes.
 
 Using the new JWait/JSignalReturn interfaces in TLC, threads can use
 condition variables.  See modules/other/BoundedQueueSplit.tla for an
-example.  Run using:
+example.  Run as follows:
 
-    ./pluspy -n producer%p1 -n producer%p2 -n producer%p3 \
+    ./pluspy -n producer%p1 -c100 -n producer%p2 -n producer%p3 \
                 -n consumer%c1 -n consumer%c2 -n consumer%c3 TestBQ
+
+(This won't work if you try to run this without threads.)
 
 -------- EXAMPLE 3: Sending and Receiving Messages --------
 
