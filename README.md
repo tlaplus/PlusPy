@@ -28,10 +28,10 @@ Run "./pluspy -c2 HourClock"
 
 The output should be something like:
 
-Initial context: [ hr: 6 ]
-Next state: 0 [ hr: 7 ]
-Next state: 1 [ hr: 8 ]
-MAIN DONE
+    Initial context: [ hr: 6 ]
+    Next state: 0 [ hr: 7 ]
+    Next state: 1 [ hr: 8 ]
+    MAIN DONE
 
 You can find the HourClock module in modules/book/HourClock.tla.
 The interpreter shows three "contexts", which are assignments of
@@ -111,9 +111,9 @@ Messaging is specified in the modules/lib/Messaging.tla module.
 Besides the message interface variable mi, there are the following
 three operators exported:
 
-Init                        \* initializes mi
-Send(msgs)                  \* sends the given << destination, payload >> messages
-Receive(p, Deliver(_, _))   \* wait for a message for p and call Deliver(p, payload)
+    Init                        \* initializes mi
+    Send(msgs)                  \* sends the given << destination, payload >> messages
+    Receive(p, Deliver(_, _))   \* wait for a message for p and call Deliver(p, payload)
 
 The spec proper is specified after the comment "\*++:SPEC".  If you look further
 you'll find a second comment "\*++:PlusPy".  This is where the implementation of
