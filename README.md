@@ -117,11 +117,11 @@ three operators exported:
 
 The spec proper is specified after the comment "\*++:SPEC".  If you look further
 you'll find a second comment "\*++:PlusPy".  This is where the implementation of
-the messaging module starts.  It uses the IO module described below.
+the messaging module starts.  It uses the IOUtils module described below.
 
--------- The IO module --------
+-------- The IOUtils module --------
 
-PlusPy exports a module in modules/lib/IO.tla that allows processes to do various
+PlusPy exports a module in modules/lib/IOUtils.tla that allows processes to do various
 kinds of I/O.  There are currently three kinds of interfaces defined: "fd", "tcp",
 and "local".  For "fd", there are three muxes: "stdin", "stdout", and "stderr".
 For example IOPut("fd", "stdout", "hello") prints hello.  Note that all I/O is
@@ -229,7 +229,7 @@ code.  You can specify this in the pluspy.wrappers variable.  For example:
         "Len": LenWrapper()
     }
 
-The IO module is implemented using a wrapper.
+The IOUtils module is implemented using a wrapper.
 
 -------- Discussion of interfacing between Python and TLA+ --------
 
@@ -237,7 +237,7 @@ PlusPy allows TLA+ and Python to interface in a variety of ways, as demonstrated
 above.  It is important to try to avoid ad hoc solutions.  The Messaging and Input
 modules provide a clean separation between the TLA+ world and the Python world.
 They can be used with the TLC model checker or TLAPS to validate your code.  The
-IO module is outside the TLA+ world, so if you extend it, try to do it through a
+IOUtils module is outside the TLA+ world, so if you extend it, try to do it through a
 module that has clean semantics.
 
 Similarly, while it is possible to invoke operators other than "Spec" directly from

@@ -52,7 +52,7 @@ Receive(p, Deliver(_, _)) ==
 
 \*++:PlusPy
 
-LOCAL INSTANCE IO
+LOCAL INSTANCE IOUtils
 
 \* Initially no messages are undelivered
 Init == mi = TRUE

@@ -1,5 +1,5 @@
-------------------------------- MODULE IO ----------------------------------
-\* This module essentially uses a hidden sequence variable H
+------------------------------- MODULE IOUtils ----------------------------------
+\* Input/Output.  This module essentially uses a hidden sequence variable H
 
 \* Append << intf, mux, data >> to the end of sequence H
 IOPut(intf, mux, data) == TRUE \* H' = Append(H, <<intf, mux, data>>)

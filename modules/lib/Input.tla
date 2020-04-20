@@ -6,7 +6,7 @@ Receive(p, Deliver(_, _)) == \E x: Deliver(p, x)
 =========================================================================
 
 \*++:PlusPy
-LOCAL INSTANCE IO
+LOCAL INSTANCE IOUtils
 
 Receive(p, Deliver(_, _)) ==
     /\ IOWait("fd", "stdin")

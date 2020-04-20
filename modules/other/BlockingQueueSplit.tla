@@ -1,5 +1,5 @@
 ------------------------- MODULE BlockingQueueSplit -------------------------
-EXTENDS Naturals, Sequences, FiniteSets, TLC
+EXTENDS Naturals, Sequences, FiniteSets, TLCExt
 
 CONSTANTS Producers,   (* the (nonempty) set of producers                       *)
           Consumers,   (* the (nonempty) set of consumers                       *)
