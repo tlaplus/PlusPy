@@ -1,0 +1,107 @@
+------------------------- MODULE BlockingQueueSplit -------------------------
+EXTENDS Naturals, Sequences, FiniteSets, TLC
+
+CONSTANTS Producers,   (* the (nonempty) set of producers                       *)
+          Consumers,   (* the (nonempty) set of consumers                       *)
+          BufCapacity  (* the maximum number of messages in the bounded buffer  *)
+
+ASSUME Assumption ==
+       /\ Producers # {}                      (* at least one producer *)
+       /\ Consumers # {}                      (* at least one consumer *)
+       /\ Producers \intersect Consumers = {} (* no thread is both consumer and producer *)
+       /\ BufCapacity \in (Nat \ {0})         (* buffer capacity is at least 1 *)
+
+-----------------------------------------------------------------------------
+
+VARIABLES buffer, waitSetC, waitSetP
+vars == <<buffer, waitSetC, waitSetP>>
+
+RunningThreads == (Producers \cup Consumers) \ (waitSetC \cup waitSetP)
+
+NotifyOther(ws, d) == 
+         \/ /\ ws = {}
+            /\ UNCHANGED ws
+            /\ JReturn(d)
+         \/ /\ ws # {}
+            /\ \E t \in ws: ws' = ws \ {t} /\ JSignalReturn(t, d)
+
+(* @see java.lang.Object#wait *)
+Wait(ws, t) == /\ ws' = ws \cup {t}
+               /\ JWait(t)
+           
+-----------------------------------------------------------------------------
+
+Put(t, d) ==
+/\ \/ /\ Len(buffer) < BufCapacity
+      /\ NotifyOther(waitSetC, "done")
+      /\ buffer' = Append(buffer, d)
+      /\ UNCHANGED waitSetP
+   \/ /\ Len(buffer) = BufCapacity
+      /\ Wait(waitSetP, t)
+      /\ UNCHANGED <<waitSetC, buffer>>
+/\ t \notin waitSetP
+      
+Get(t) ==
+/\ t \notin waitSetC
+/\ \/ /\ buffer # <<>>
+      /\ buffer' = Tail(buffer)
+      /\ NotifyOther(waitSetP, Head(buffer))
+      /\ UNCHANGED waitSetC
+   \/ /\ buffer = <<>>
+      /\ Wait(waitSetC, t)
+      /\ UNCHANGED <<waitSetP, buffer>>
+
+-----------------------------------------------------------------------------
+
+TypeInv == /\ Len(buffer) \in 0..BufCapacity
+           /\ waitSetP \in SUBSET Producers
+           /\ waitSetC \in SUBSET Consumers
+
+(* Initially, the buffer is empty and no thread is waiting. *)
+Init == /\ buffer = <<>>
+        /\ waitSetC = {}
+        /\ waitSetP = {}
+
+(* Then, pick a thread out of all running threads and have it do its thing. *)
+Next == \/ \E p \in Producers: Put(p, p) \* Add some data to buffer
+        \/ \E c \in Consumers: Get(c)
+
+Spec == Init /\ [][Next]_vars
+
+
+(*RVR: no support for TLAPS yet
+
+(* BlockingQueueSplit refines BlockingQueue. The refinement mapping is *)
+(* straight forward in this case. The union of waitSetC and waitSetP   *)
+(* maps to waitSet in the high-level spec BlockingQueue.               *)
+A == INSTANCE BlockingQueue WITH waitSet <- (waitSetC \cup waitSetP)
+
+(* A!Spec is not a valid value in the config BlockingQueueSplit.cfg.   *)
+ASpec == A!Spec
+
+-----------------------------------------------------------------------------
+
+INSTANCE TLAPS
+
+(* Scaffolding: TypeInv is inductive. *)
+LEMMA ITypeInv == Spec => []TypeInv
+<1> USE Assumption DEF TypeInv
+<1>1. Init => TypeInv
+  BY SMT DEF Init
+<1>2. TypeInv /\ [Next]_vars => TypeInv'
+  BY SMT DEF Next, vars, Put, Get, Wait, NotifyOther
+<1>3. QED
+  BY <1>1, <1>2, PTL DEF Spec
+
+THEOREM Implements == Spec => A!Spec
+<1> USE Assumption, A!Assumption
+<1>1. Init => A!Init 
+   BY Isa DEF Init, A!Init
+<1>2. TypeInv /\ [Next]_vars => [A!Next]_A!vars
+   BY SMT DEF TypeInv, Next, vars, Put, Get, Wait, NotifyOther, A!Next, 
+          A!vars, A!Put, A!Get, A!Wait, A!NotifyOther
+<1>3. QED BY <1>1, <1>2, PTL, ITypeInv DEF Spec, A!Spec
+
+RVR*)
+
+=============================================================================
