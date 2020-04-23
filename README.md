@@ -53,10 +53,10 @@ a separate thread.  Run: "./pluspy -c100 -n proc%0 -n proc%1 Peterson".
 The "-n x%y" argument to pluspy starts a thread that repeatedly evaluates
 the x operator with argument y instead of the default "Next".  You may
 also want to try: "./pluspy -c100 -n proc%0 Peterson" and 
-./pluspy -c100 -n proc%1 Peterson" which each will run just one of the
+"./pluspy -c100 -n proc%1 Peterson" which each will run just one of the
 processes.
 
-Using the new JWait/JSignalReturn interfaces in TLC, threads can use
+Using the new JWait/JSignalReturn interfaces in TLCExt, threads can use
 condition variables.  See modules/other/BoundedQueueSplit.tla for an
 example.  Run as follows:
 

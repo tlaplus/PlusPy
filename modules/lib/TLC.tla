@@ -72,12 +72,14 @@ JavaTime == CHOOSE n : n \in Nat
 (* can be initialized by putting the appropriate TLCSet expression in an   *)
 (* ASSUME expression or in the initial predicate.                          *)
 (***************************************************************************)
+
 TLCGet(i) == CHOOSE n : TRUE
 TLCSet(i, v) == TRUE
 -----------------------------------------------------------------------------
 d :> e == [x \in {d} |-> e]
 f @@ g == [x \in (DOMAIN f) \cup (DOMAIN g) |->
             IF x \in DOMAIN f THEN f[x] ELSE g[x]]
+
 Permutations(S) ==
    {f \in [S -> S] : \A w \in S : \E v \in S : f[v]=w}
 -----------------------------------------------------------------------------
