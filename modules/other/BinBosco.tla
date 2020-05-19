@@ -62,6 +62,6 @@ Proc(p) ==
 
 Next == \E p \in Processes: Proc(p)
 
-Spec == Init /\ [][Next]_<<procs, mi>>
+Spec == Init /\ [][Next]_<<procs, mi, msgs>>
 
 =============================================================================
