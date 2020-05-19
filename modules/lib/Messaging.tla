@@ -24,7 +24,7 @@ Init == mi = InitialState(Processes)
 LOCAL doSend[intf \in [Processes -> Seq(Message)], msgs \in SUBSET Message] ==
     IF msgs = {} THEN intf
     ELSE
-        LET m == CHOOSE m: m \in msgs
+        LET m == CHOOSE m \in msgs : TRUE
         IN doSend[[intf EXCEPT ![m[1]] = Append(@, m[2])], msgs \ {m}]
 
 \* Helper operator for Send()
