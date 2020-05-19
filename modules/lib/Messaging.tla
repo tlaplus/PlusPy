@@ -18,10 +18,12 @@ LOCAL InitialState(procs) == [ p \in procs |-> <<>> ]
 \* Initially no messages are undelivered
 Init == mi = InitialState(Processes)
 
-\* Function takes intf, the state of the message interface, and msgs, a set
-\* of << destination, payload >> pairs, and updates the state by adding
-\* the messages to the right queue of undelivered messages
-LOCAL doSend[intf \in [Processes -> Seq(Message)], msgs \in SUBSET Message] ==
+\* Function takes intf, the state of the messaging interface, and msgs, a
+\* set of << destination, message >> pairs, and updates the state by adding
+\* the message to the right (destination) queue of undelivered messages.
+LOCAL doSend[intf \in [Processes -> Seq(Message)],
+             msgs \in SUBSET 
+                 {<<proc, msg>> : proc \in Processes, msg \in Message}] ==
     IF msgs = {} THEN intf
     ELSE
         LET m == CHOOSE m \in msgs : TRUE
