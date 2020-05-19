@@ -8,8 +8,10 @@ ASSUME Cardinality(Data) \in { 1, 2 }
 
 VARIABLES procs, mi, msgs
 
+Rnd == Nat
+
 \* Type of vote
-Vote == [ round: Nat, estimate: Data ]
+Vote == [ round: Rnd, estimate: Data ]
 
 \* Type of message
 Message == [ src: Processes, vote: Vote ]
