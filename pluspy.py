@@ -3948,7 +3948,7 @@ class JSignalReturnWrapper(Wrapper):
         signalset.add(args[0])
         return args[1]
 
-wrappers["TLC"] = {
+wrappers["TLCExt"] = {
     "JWait": JWaitWrapper(),
     "JSignalReturn": JSignalReturnWrapper()
 }
