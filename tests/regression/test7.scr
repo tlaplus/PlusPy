@@ -1,4 +1,4 @@
-./pluspy -S0 -c100 QSort > test7.out 2>test7.out2
+./pluspy -S0 -c100 Qsort > test7.out 2>test7.out2
 if cmp -s test7.out regression/test7.exp
 then
     if cmp -s test7.out2 regression/test7.exp2
