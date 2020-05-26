@@ -7,8 +7,11 @@ import traceback
 pluspypath = ".:./modules/lib:./modules/book:./modules/other"
 
 def exit(status):
-    sys.stdout.flush()
-    os._exit(status)
+    if __name__ == "__main__":
+        sys.stdout.flush()
+        os._exit(status)
+    elif status is not 0:
+        raise PlusPyError('error: ' + str(status))
 
 # When compiling and running into an identifier, it should be clear
 # exactly what that identifier refers to.  It could be the name of:
