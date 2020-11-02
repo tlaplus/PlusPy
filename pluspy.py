@@ -3,6 +3,7 @@
 import os
 import random
 import traceback
+import itertools
 
 pluspypath = ".:./modules/lib:./modules/book:./modules/other"
 
@@ -1640,6 +1641,11 @@ def lexer(s, file):
         first = False
         s = s[1:]
         column += 1
+
+    # throw away the preamble
+    not_four_dash = lambda x : lexeme(x) != "----"
+    result = list(itertools.dropwhile(not_four_dash, result))
+
     return result
 
 #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### 
