@@ -4,17 +4,62 @@ import unittest
 
 class TestLexer(unittest.TestCase):
     def test_ignore_preamble(self):
-        s = '''
-        This is some prose preceding the module definition.
-
-        \* WORKAROUND: Comment prose before the module definition.
+        cases = [
+            {
+                "name": "preamble",
+                "input": '''
+                         This is some prose preceding the module definition.
+   
+                         \* WORKAROUND: Comment prose before the module definition.
+                         
+                         ---- MODULE AsyncGameOfLifeDistributed -----
+                         
+                         VARIABLE x
+                         Spec == x = TRUE /\ [][x'\in BOOLEAN]_x
+                         ====
+                         ''',
+            },
+            {
+                "name": "preamble with four dashes",
+                "input": '''
+                         ---- What is this 
+    
+                         \* A comment 
+                         
+                         And more preamble there is.
+                         
+                         ------------------------------- MODULE Somename -------------------------------
+                         ''',
+            },
+            {
+                "name": "preamble with commented module",
+                "input": ''''
+                         ---- What is this 
         
-        ---- MODULE AsyncGameOfLifeDistributed -----
-        
-        VARIABLE x
-        Spec == x = TRUE /\ [][x'\in BOOLEAN]_x
-        ====
-        '''
+                         \* A comment  
+                         \* ---- MODULE foo ---- 
+                         And more preamble there is. 
+                          
+                         -------------------------------  MODULE Foo -------------------------------
+                          
+                          
+                         ================================ =============================================
+                '''
+            },
+        ]
 
-        results = pluspy.lexer(s, "nofile.tla")
-        assert pluspy.lexeme(results[0]) == "----"
+        for case in cases:
+            results = pluspy.lexer(case["input"], "nofile.tla")
+            a, b = results[0], results[1]
+            self.assertEqual(
+                "----", pluspy.lexeme(a),
+                "failed test {} expected {}, actual {}".format(
+                    case["name"], "----", a
+                ),
+            )
+            self.assertEqual(
+                "MODULE", pluspy.lexeme(b),
+                "failed test {} expected {}, actual {}".format(
+                    case["name"], "MODULE", b
+                ),
+            )

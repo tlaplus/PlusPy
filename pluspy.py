@@ -1643,12 +1643,17 @@ def lexer(s, file):
         column += 1
 
     # throw away the preamble
-    not_four_dash = lambda x : lexeme(x) != "----"
-    result = list(itertools.dropwhile(not_four_dash, result))
+    while True:
+        if len(result) < 2:
+            break
+        if lexeme(result[0]) == "----" and lexeme(result[1]) == "MODULE":
+            break
+        else:
+            result = result[1:]
 
     return result
 
-#### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### 
+#### #### #### #### #### #### #### #### #### #### #### #### #### #### #### ####
 ####    Compiler: Expressions
 #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### 
 
