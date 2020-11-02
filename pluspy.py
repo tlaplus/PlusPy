@@ -3,6 +3,7 @@
 import os
 import random
 import traceback
+import itertools
 
 pluspypath = ".:./modules/lib:./modules/book:./modules/other"
 
@@ -1640,9 +1641,41 @@ def lexer(s, file):
         first = False
         s = s[1:]
         column += 1
+
+    # We discard the preamble tokens below.
+    #
+    # Preamble is defined as anything that comes before the module start
+    # tokens which are `AtLeast4("-"), tok("MODULE"), Name, AtLeast4("-")` as
+    # defined in [1].
+    #
+    # We could have forwarded them to the parser and handled them there.
+    #
+    # - We discard comments right here. No tokens are created for them
+    # and the parser doesn't have to worry about them.
+    # - Preamble is also like a comment. It is not useful in later stages.
+    #
+    # Discarding preamble tokens here keeps its handling consistent with
+    # that of the comments and avoids complicating the parser code.
+    #
+    # For details see [2].
+    #
+    # References:
+    # [1] https://lamport.azurewebsites.net/tla/TLAPlus2Grammar.tla
+    # [2] https://github.com/tlaplus/PlusPy/issues/7
+    while True:
+        if len(result) < 4:
+            break
+        atLeast4Before = lexeme(result[0]) == "----"
+        tokMODULE = lexeme(result[1]) == "MODULE"
+        atLeast4After = lexeme(result[3]) == "----"
+        if atLeast4Before and tokMODULE and atLeast4After:
+            break
+        else:
+            result = result[1:]
+
     return result
 
-#### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### 
+#### #### #### #### #### #### #### #### #### #### #### #### #### #### #### ####
 ####    Compiler: Expressions
 #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### 
 
