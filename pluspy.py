@@ -1644,9 +1644,12 @@ def lexer(s, file):
 
     # throw away the preamble
     while True:
-        if len(result) < 2:
+        if len(result) < 4:
             break
-        if lexeme(result[0]) == "----" and lexeme(result[1]) == "MODULE":
+        atLeast4Before = lexeme(result[0]) == "----"
+        tokMODULE = lexeme(result[1]) == "MODULE"
+        atLeast4After = lexeme(result[3]) == "----"
+        if atLeast4Before and tokMODULE and atLeast4After:
             break
         else:
             result = result[1:]
