@@ -808,10 +808,23 @@ class Rule:
 class GModule(Rule):
     def parse(self, s):
         return self.match("GModule", s, Concat([
+            Optional(Preamble()),
             tok("----"), tok("MODULE"), Name(), tok("----"),
             Optional(Concat([ tok("EXTENDS"), CommaList(Name()) ]), [1]),
             AtLeast(GUnit(), 0), tok("====")
-        ]), [ 2, 4, 5 ])
+        ]), [ 3, 5, 6 ])
+
+class Preamble(Rule):
+    def __init__(self):
+        pass
+    def parse(self, s):
+        while len(s) > 4:
+            a, b, _, d = tuple([lexeme(x) for x in s[:4]])
+            if a == "----" and b == "MODULE" and d == "----":
+                break
+            else:
+                s = s[1:]
+        return ("Preamble", None, s)
 
 # This rule recognizes a list of other rules:  rule1 & rule2 & rule3 & ...
 class Concat(Rule):
