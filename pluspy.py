@@ -1650,9 +1650,9 @@ def lexer(s, file):
     #
     # We could have forwarded them to the parser and handled them there.
     #
-    # 1. We discard comments right here. No tokens are created for them
-    #    and the parser doesn't have to worry about them.
-    # 2. Preamble is also like a comment. It is not useful in later stages.
+    # - We discard comments right here. No tokens are created for them
+    # and the parser doesn't have to worry about them.
+    # - Preamble is also like a comment. It is not useful in later stages.
     #
     # Discarding preamble tokens here keeps its handling consistent with
     # that of the comments and avoid complicating the parser code.
