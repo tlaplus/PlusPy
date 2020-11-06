@@ -1642,7 +1642,26 @@ def lexer(s, file):
         s = s[1:]
         column += 1
 
-    # throw away the preamble
+    # We discard the preamble tokens below.
+    #
+    # Preamble is defined as anything that comes before the module start
+    # tokens which are `AtLeast4("-"), tok("MODULE"), Name, AtLeast4("-")` as
+    # defined in [1].
+    #
+    # We could have forwarded them to the parser and handled them there.
+    #
+    # 1. We discard comments right here. No tokens are created for them
+    #    and the parser doesn't have to worry about them.
+    # 2. Preamble is also like a comment. It is not useful in later stages.
+    #
+    # Discarding preamble tokens here keeps its handling consistent with
+    # that of the comments and avoid complicating the parser code.
+    #
+    # For details see [2].
+    #
+    # References:
+    # [1] https://lamport.azurewebsites.net/tla/TLAPlus2Grammar.tla
+    # [2] https://github.com/tlaplus/PlusPy/issues/7
     while True:
         if len(result) < 4:
             break
