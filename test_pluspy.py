@@ -50,7 +50,7 @@ class TestLexer(unittest.TestCase):
 
         for case in cases:
             results = pluspy.lexer(case["input"], "nofile.tla")
-            a, b = results[0], results[1]
+            a, b, _, d = results[0], results[1], results[2], results[3]
             self.assertEqual(
                 "----", pluspy.lexeme(a),
                 "failed test {} expected {}, actual {}".format(
@@ -63,3 +63,11 @@ class TestLexer(unittest.TestCase):
                     case["name"], "MODULE", b
                 ),
             )
+            self.assertEqual(
+                "----", pluspy.lexeme(d),
+                "failed test {} expected {}, actual {}".format(
+                    case["name"], "----", a
+                ),
+            )
+
+

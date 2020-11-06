@@ -1655,7 +1655,7 @@ def lexer(s, file):
     # - Preamble is also like a comment. It is not useful in later stages.
     #
     # Discarding preamble tokens here keeps its handling consistent with
-    # that of the comments and avoid complicating the parser code.
+    # that of the comments and avoids complicating the parser code.
     #
     # For details see [2].
     #
