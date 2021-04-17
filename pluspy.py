@@ -774,6 +774,30 @@ def parseError(a, r):
         shortest = r
     return (False, a, r)
 
+
+
+# Handy routine for rules that simply call other rules
+# It parses s using the given rule and returns a node (name, (t, a), r)
+# where name is the type of the AST node and (t, a) the result of
+# parsing given the rule.
+#
+# If t is a "Concat" rule (sequence of other rules), then you can
+# select a subset using the select argument
+#
+# Otherwise, if select is not None, the result of the rule is
+# directly returned without adding a new AST node
+def match(name, s, rule, select=None):
+    (t, a, r) = rule.parse(s)
+    if not t:
+        return parseError([name] + a, r)
+    if isinstance(select, list) and t == "Concat":
+        if len(select) == 1:
+            return (name, a[select[0]], r)
+        return (name, [ a[i] for i in select ], r)
+    if select != None:
+        return (t, a, r)
+    return (name, (t, a), r)
+
 # BNF rule
 class Rule:
     # s is a list of tokens.  Returns (t, a, r) where
@@ -784,31 +808,10 @@ class Rule:
     def parse(self, s):
         return parseError(["Rule.parse undefined"], s)
 
-    # Handy routine for rules that simply call other rules
-    # It parses s using the given rule and returns a node (name, (t, a), r)
-    # where name is the type of the AST node and (t, a) the result of
-    # parsing given the rule.
-    #
-    # If t is a "Concat" rule (sequence of other rules), then you can
-    # select a subset using the select argument
-    #
-    # Otherwise, if select is not None, the result of the rule is
-    # directly returned without adding a new AST node
-    def match(self, name, s, rule, select=None):
-        (t, a, r) = rule.parse(s)
-        if not t:
-            return parseError([name] + a, r)
-        if isinstance(select, list) and t == "Concat":
-            if len(select) == 1:
-                return (name, a[select[0]], r)
-            return (name, [ a[i] for i in select ], r)
-        if select != None:
-            return (t, a, r)
-        return (name, (t, a), r)
 
 class GModule(Rule):
     def parse(self, s):
-        return self.match("GModule", s, Concat([
+        return match("GModule", s, Concat([
             tok("----"), tok("MODULE"), Name(), tok("----"),
             Optional(Concat([ tok("EXTENDS"), CommaList(Name()) ]), [1]),
             AtLeast(GUnit(), 0), tok("====")
@@ -937,7 +940,7 @@ class Tag(Rule):
         self.select = select
 
     def parse(self, s):
-        return self.match(self.name, s, self.rule, self.select)
+        return match(self.name, s, self.rule, self.select)
 
 class Number(Rule):
     def __init__(self):
@@ -1027,7 +1030,7 @@ class Tuple(Rule):
         pass
 
     def parse(self, s):
-        return self.match("Tuple", s, Concat([ tok("<<"),
+        return match("Tuple", s, Concat([ tok("<<"),
             # TODO.  Book does not allow empty tuples
             Optional(CommaList(GExpression(0))), tok(">>") ]), [1])
 
@@ -1036,7 +1039,7 @@ class GUnit(Rule):
         return Tag(tag, Concat([ Optional(tok("LOCAL")), decl ]), [0, 1])
 
     def parse(self, s):
-        return self.match("GUnit", s, OneOf([
+        return match("GUnit", s, OneOf([
             GVariableDeclaration(),
             GConstantDeclaration(),
             self.local("decl-op", GOperatorDefinition()),
@@ -1051,25 +1054,25 @@ class GUnit(Rule):
 
 class GDivider(Rule):
     def parse(self, s):
-        return self.match("GDivider", s, tok("----"))
+        return match("GDivider", s, tok("----"))
 
 class GVariableDeclaration(Rule):
     def parse(self, s):
-        return self.match("GVariableDeclaration", s, Concat([
+        return match("GVariableDeclaration", s, Concat([
             OneOf([ tok("VARIABLE"), tok("VARIABLES") ]),
             CommaList(Identifier())
         ]), [1])
 
 class GConstantDeclaration(Rule):
     def parse(self, s):
-        return self.match("GConstantDeclaration", s, Concat([
+        return match("GConstantDeclaration", s, Concat([
             OneOf([ tok("CONSTANT"), tok("CONSTANTS") ]),
             CommaList(GOpDecl())
         ]), [1])
 
 class GOpDecl(Rule):
     def parse(self, s):
-        return self.match("GOpDecl", s, OneOf([
+        return match("GOpDecl", s, OneOf([
             Identifier(),
             Tag("paramOp", Concat([
                 Identifier(), tok("("), CommaList(tok("_")), tok(")")
@@ -1088,21 +1091,21 @@ class GOpDecl(Rule):
 
 class GNonFixLHS(Rule):
     def parse(self, s):
-        return self.match("GNonFixLHS", s, Concat([
+        return match("GNonFixLHS", s, Concat([
             Identifier(),
             Optional(Concat([ tok("("), CommaList(GOpDecl()), tok(")") ]), [1])
         ]), [0, 1])
 
 class GFunctionDefinition(Rule):
     def parse(self, s):
-        return self.match("GFunctionDefinition", s, Concat([
+        return match("GFunctionDefinition", s, Concat([
             Identifier(),
             tok("["), CommaList(GQuantifierBound()), tok("]"),
             tok("=="), GExpression(0) ]), [0, 2, 5])
 
 class GOperatorDefinition(Rule):
     def parse(self, s):
-        return self.match("GOperatorDefinition", s, Concat([
+        return match("GOperatorDefinition", s, Concat([
             OneOf([
                 GNonFixLHS(),
                 Tag("prefix", Concat([ Tok(PrefixOps, "prefix operator"), Identifier() ])),
@@ -1112,12 +1115,12 @@ class GOperatorDefinition(Rule):
 
 class GTheorem(Rule):
     def parse(self, s):
-        return self.match("GTheorem", s,
+        return match("GTheorem", s,
                 Concat([ tok("THEOREM"), GExpression(0) ]), [1])
 
 class GAssumption(Rule):
     def parse(self, s):
-        return self.match("GAssumption", s, Concat([
+        return match("GAssumption", s, Concat([
             OneOf([ tok("ASSUME"), tok("ASSUMPTION"), tok("AXIOM") ]),
             Optional(Concat([ Identifier(), tok("==") ])),
             GExpression(0)
@@ -1125,7 +1128,7 @@ class GAssumption(Rule):
 
 class IdentifierOrTuple(Rule):
     def parse(self, s):
-        return self.match("IdentifierOrTuple", s, OneOf([
+        return match("IdentifierOrTuple", s, OneOf([
             Identifier(),
             Tag("Tuple", Concat([
                 tok("<<"), CommaList(Identifier()), tok(">>")
@@ -1134,13 +1137,13 @@ class IdentifierOrTuple(Rule):
 
 class GQuantifierBound(Rule):
     def parse(self, s):
-        return self.match("GQuantifierBound", s, Concat([
+        return match("GQuantifierBound", s, Concat([
             OneOf([ CommaList(Identifier()), Tuple() ]),
             tok("\\in"), GExpression(0) ]), [0, 2])
 
 class GInstance(Rule):
     def parse(self, s):
-        return self.match("GInstance", s, Concat([
+        return match("GInstance", s, Concat([
             tok("INSTANCE"), Name(), Optional(Concat([
                 tok("WITH"), CommaList(GSubstitution())
             ]), [1])
@@ -1148,14 +1151,14 @@ class GInstance(Rule):
 
 class GSubstitution(Rule):
     def parse(self, s):
-        return self.match("GSubstitution", s, Concat([
+        return match("GSubstitution", s, Concat([
             # TODO.  Can also replace prefix, infix, or postfix ops
             Identifier(), tok("<-"), GArgument()
         ]), [0, 2])
 
 class GArgument(Rule):
     def parse(self, s):
-        return self.match("GArgument", s, OneOf([
+        return match("GArgument", s, OneOf([
             GExpression(0),
             Tag("arg-prefix", GGeneralPrefixOp()),
             Tag("arg-infix", GGeneralInfixOp()),
@@ -1164,7 +1167,7 @@ class GArgument(Rule):
 
 class GInstancePrefix(Rule):
     def parse(self, s):
-        return self.match("GInstancePrefix", s,
+        return match("GInstancePrefix", s,
             AtLeast(Concat([ Identifier(), Optional(
                 Concat([ tok("("),
 
@@ -1176,27 +1179,27 @@ class GInstancePrefix(Rule):
 
 class GGeneralIdentifier(Rule):
     def parse(self, s):
-        return self.match("GGeneralIdentifier", s,
+        return match("GGeneralIdentifier", s,
             Concat([ GInstancePrefix(), Identifier() ]))
 
 class GGeneralPrefixOp(Rule):
     def parse(self, s):
-        return self.match("GGeneralPrefixOp", s,
+        return match("GGeneralPrefixOp", s,
             Concat([ GInstancePrefix(), Tok(PrefixOps, "prefix operator") ]))
 
 class GGeneralInfixOp(Rule):
     def parse(self, s):
-        return self.match("GGeneralInfixOp", s,
+        return match("GGeneralInfixOp", s,
             Concat([ GInstancePrefix(), Tok(InfixOps, "infix operator") ]))
 
 class GGeneralPostfixOp(Rule):
     def parse(self, s):
-        return self.match("GGeneralPostfixOp", s,
+        return match("GGeneralPostfixOp", s,
             Concat([ GInstancePrefix(), Tok(PostfixOps, "postfix operator") ]))
 
 class GModuleDefinition(Rule):
     def parse(self, s):
-        return self.match("GModuleDefinition", s,
+        return match("GModuleDefinition", s,
             Concat([ GNonFixLHS(), tok("=="), GInstance() ]), [0, 2])
 
 # a disjunct or conjunct token is identifier by all but the line in the token
@@ -1220,7 +1223,7 @@ class GExpression(Rule):
 
         # If at the top precedence level, get a basic expression.
         if self.level == 18:
-            return self.match("GExpression18", s, GBasicExpression(), True)
+            return match("GExpression18", s, GBasicExpression(), True)
 
         # See if this is an expression starting with /\ or \/
         lex = lexeme(s[0])
@@ -1356,7 +1359,7 @@ class GExcept(Rule):
 
 class GBasicExpression(Rule):
     def parse(self, s):
-        return self.match("GBasicExpression", s, OneOf([
+        return match("GBasicExpression", s, OneOf([
             Tag("op", Concat([
                 GGeneralIdentifier(), Optional(Concat([
                     tok("("), CommaList(GArgument()), tok(")") ]), [1])
