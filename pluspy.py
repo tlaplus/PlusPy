@@ -801,7 +801,7 @@ def match(name, s, rule, select=None):
         if len(select) == 1:
             return (name, a[select[0]], r)
         return (name, [ a[i] for i in select ], r)
-    if select != None:
+    if select is not None:
         return (t, a, r)
     return (name, (t, a), r)
 
