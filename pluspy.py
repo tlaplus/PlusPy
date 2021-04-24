@@ -775,18 +775,25 @@ def parseError(a, r):
     return (False, a, r)
 
 
-
-# Handy routine for rules that simply call other rules
-# It parses s using the given rule and returns a node (name, (t, a), r)
-# where name is the type of the AST node and (t, a) the result of
-# parsing given the rule.
-#
-# If t is a "Concat" rule (sequence of other rules), then you can
-# select a subset using the select argument
-#
-# Otherwise, if select is not None, the result of the rule is
-# directly returned without adding a new AST node
 def match(name, s, rule, select=None):
+    """
+    Handy routine for rules that simply call other rules
+    It parses s using the given rule and returns a node (name, (t, a), r)
+    where name is the type of the AST node and (t, a) the result of
+    parsing given the rule and r is remaining tokens.
+
+    If t is a "Concat" rule (sequence of other rules), then you can
+    select a subset using the select argument.
+
+    Otherwise, if select is not None, the result of the rule is
+    directly returned without adding a new AST node.
+
+    :param name: the type of the AST node
+    :param s: list of tokens
+    :param rule: rule to parse s with
+    :param select: subset of rules to select
+    :return: AST node with selected rules
+    """
     (t, a, r) = rule.parse(s)
     if not t:
         return parseError([name] + a, r)
