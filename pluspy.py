@@ -3314,6 +3314,7 @@ class InfixExpression(Expression):
             if lex == "/\\": return lhs and rhs
             if lex == "\\/": return lhs or rhs
             if lex == "=": return lhs == rhs
+            if lex == "/=" or lex == "#": return lhs != rhs
             if lex == "\\in": return lhs in rhs
             if lex == "\\notin": return lhs not in rhs
         except Exception as e:
